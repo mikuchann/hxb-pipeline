@@ -1,0 +1,106 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTaskTemplate
+metadata:
+  name: seleniumTest
+  annotations:
+    alauda.io/displayName.zh-CN: Selenium 测试
+    alauda.io/displayName.en: Selenium Test
+    alauda.io/description.zh-CN: Selenium 测试
+    alauda.io/description.en: Selenium Test
+    alauda.io/readme.zh-CN: Selenium 测试
+    alauda.io/readme.en: Selenium Test
+    alauda.io/version: "1.0.0"
+    alauda.io/style.icon: ""
+  labels:
+    category: Test
+spec:
+  engine: gotpl
+  body: |+
+    script {
+      container('selenium'){
+        env.reportPath=currentBuild.fullProjectName + '/' + currentBuild.number + '/'
+        sh '''
+        echo $PWD
+        python3 {{.testPlan}}
+        file=$(find $PWD/ -name test-report.html)
+        echo $file
+        mkdir result
+        cp $file result/index.html
+        file='result/index.html'
+        sed -i 's#https://cdn.bootcss.com#http://103.160.25.35:32003#g' $file
+        echo "http://${REPORT_SERVER}:${REPORT_SERVER_PORT}/upload?token=${REPORT_SERVER_TOKEN}&path=${reportPath}"
+        curl  -Ffile=@${file} "http://${REPORT_SERVER}:${REPORT_SERVER_PORT}/upload?token=${REPORT_SERVER_TOKEN}&path=${reportPath}"
+        '''
+        echo 'test report link is below:'
+        env.reportLink="http://${REPORT_SERVER}:${REPORT_SERVER_WEB_PORT}/" + currentBuild.fullProjectName + '/' + currentBuild.number + '/index.html'
+
+        publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false,
+          reportDir: 'result', reportFiles: 'index.html', reportName: 'HTML Report', reportTitles: ''])
+
+        {{if .EnableMail -}}
+        NOTIFICATIONS = """{{.Notifications}}"""
+        DETAILS = """{{.Content}}"""
+        def notice = """{"apiVersion":"aiops.alauda.io/v1beta1","kind":"NotificationMessage","metadata":{"name":"${BUILD_TIMESTAMP}","namespace":"alauda-system"},"spec":{"body":{"details": ${DETAILS}},"notifications": ${NOTIFICATIONS}}}"""
+        alaudaDevops.withCluster(){alaudaDevops.withProject('alauda-system'){alaudaDevops.create(notice)}}
+        {{- end}}
+
+          
+      }
+    }
+  arguments:
+    - name: "testPlan"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "测试计划文件"
+          en: "Test plan file"
+        description:
+          zh-CN: "测试计划文件"
+          en: "Test plan file"
+      required: true
+      default: ''
+
+
+    - name: "EnableMail"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "邮件通知"
+          en: "Send Mail"
+        description:
+          zh-CN: "邮件通知"
+          en: "Send Mail"
+
+    - name: "Notifications"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "通知方法"
+          en: "Notification Method"
+        description:
+          zh-CN: "通知方法"
+          en: "Notification Method"
+      required: false
+      default: '[{"name":"test-mail-notification"}]'
+
+    - name: "Content"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "邮件内容"
+          en: "Content"
+        description:
+          zh-CN: "邮件内容"
+          en: "Content"
+      required: false
+      default: '{"BUILD_TIMESTAMP":"${BUILD_TIMESTAMP}","JOB_BASE_NAME":"${JOB_BASE_NAME}","reportLink":"${reportLink}"}'
+

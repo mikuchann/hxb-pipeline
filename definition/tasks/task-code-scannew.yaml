@@ -1,0 +1,299 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTaskTemplate
+metadata:
+  name: sonarnew
+  annotations:
+    alauda.io/displayName.zh-CN: 代码扫描
+    alauda.io/displayName.en: CodeScan
+    alauda.io/description.zh-CN: 代码扫描
+    alauda.io/description.en: CodeScan
+    alauda.io/readme.zh-CN: 代码扫描
+    alauda.io/readme.en: CodeScan
+    alauda.io/version: "1.0.4"
+    alauda.io/style.icon: ""
+  labels:
+    category: CI
+spec:
+  engine: gotpl
+  body: |+
+    container('tools') {
+      script {
+        try{
+        env.CODE_QUALITY_BINDING_NAME = "{{.CodeQualityBinding.name}}"
+        env.CODE_QUALITY_BINDING_NAMESPACE = "{{.CodeQualityBinding.namespace}}"
+        env.CODE_REPOSITORY_KEY = "{{.PlatformCodeRepository.url}}".replace("http://", "").replace("https://", "").replaceAll("/", "-")
+        env.CODE_REPOSITORY_NAME = "${CODE_REPOSITORY_KEY}"
+        env.BRANCH = "{{.Branch}}"
+        if (env.BRANCH.equals("*/master")) {
+          env.BRANCH = "master"
+        }
+
+        if (fileExists('sonar-project.properties')) {
+          env.ANALYSIS_PARAMETERS = ""
+        } else {
+          env.ANALYSIS_PARAMETERS = """{{.AnalysisParameters}}""".replaceAll("\r\n"," ").replaceAll("\n", " ").replaceAll("sonar", "-D sonar")
+        }
+
+        {{if .EnableBranchAnalysis -}}
+        env.ANALYSIS_PARAMETERS = env.ANALYSIS_PARAMETERS + " -D sonar.branch.name=${BRANCH}"
+        {{- end}}
+
+        alaudaPlatform.withBindInProjectSonarEnv("${CODE_QUALITY_BINDING_NAMESPACE}", "${CODE_QUALITY_BINDING_NAME}"){
+          sh "#!/bin/sh -e\n" + "sonar-scanner -D sonar.host.url=${SONAR_SERVER_URL} -D sonar.login=${SONAR_TOKEN} -D sonar.projectName=${CODE_REPOSITORY_NAME} -D sonar.projectKey=${CODE_REPOSITORY_KEY} ${ANALYSIS_PARAMETERS}"
+
+          timeout(time: 1, unit: 'HOURS') {
+            def statusCode = sh script: "#!/bin/sh -e\n" + "cmdclient taskmonitor --host=${SONAR_SERVER_URL} --token=${SONAR_TOKEN}", returnStatus:true
+
+            // status codes come from bergamot cmdclient - https://github.com/alauda/bergamot/blob/master/sonarqube/cmdclient/cmd/task_monitor.go
+            def QUALITY_GATE_SUCCESS = 0
+            def QUALITY_GATE_WARN = 134
+            def QUALITY_GATE_ERROR = 133
+            def QUALITY_GATE_UNKNOW = 135
+
+            def projectLink = "${SONAR_SERVER_URL}"
+            if (!projectLink.endsWith("/")) {
+              projectLink = projectLink + "/"
+            }
+
+            projectLink = projectLink + "dashboard?id=${CODE_REPOSITORY_KEY}"
+
+            switch(statusCode) {
+              case QUALITY_GATE_SUCCESS:
+                sh "echo \"Quality Gate Status of Project ${CODE_REPOSITORY_NAME} is OK\""
+                addBadge icon: 'green.gif', text: 'OK', id: 'QualityGate', link: projectLink
+                break
+              case QUALITY_GATE_WARN:
+                sh "echo \"Quality Gate Status of Project ${CODE_REPOSITORY_NAME} is WARN\""
+                addBadge icon: 'yellow.gif', text: 'WARN', id: 'QualityGate', link: projectLink
+                break
+              case QUALITY_GATE_ERROR:
+                sh "echo \"Quality Gate Status of Project ${CODE_REPOSITORY_NAME} is ERROR\""
+                addBadge icon: 'red.gif', text: 'ERROR', id: 'QualityGate', link: projectLink
+                {{if .FailedIfNotPassQualityGate -}}
+                error "Pipeline aborted due to quality gate failure: ERROR"
+                currentBuild.result = 'FAILURE'
+                {{- end}}
+                break
+              default:
+                sh "echo \"Quality Gate Status of Project ${CODE_REPOSITORY_NAME} is UNKOWN\""
+                break
+            }
+          }
+        }
+        }catch(Exception err){
+
+                {{if .EnableMail -}}
+                NOTIFICATIONS = """{{.Notifications}}"""
+                DETAILS = """{"BUILD_TIMESTAMP":"${BUILD_TIMESTAMP}","JOB_BASE_NAME":"${JOB_BASE_NAME}","report message":"代码扫描失败或代码扫描阈值未通过"}"""
+                def notice = """{"apiVersion":"aiops.alauda.io/v1beta1","kind":"NotificationMessage","metadata":{"name":"${BUILD_TIMESTAMP}","namespace":"alauda-system"},"spec":{"body":{"details": ${DETAILS}},"notifications": ${NOTIFICATIONS}}}"""
+                alaudaDevops.withCluster(){alaudaDevops.withProject('alauda-system'){alaudaDevops.create(notice)}}
+                {{- end}}
+
+                {{if .EnableJira -}}
+                def testIssue = [fields: [
+                  project: [key: '{{.projectKey}}'],
+                  summary: "{{.summary}}",
+                  description: "{{.description}}",
+                  issuetype: [id: '{{.issuetype}}']]]
+
+                response = jiraNewIssue issue: testIssue,site: env.JIRA_SITE
+                echo response.data.toString()
+                {{- end}}
+
+                throw err
+        }
+      }
+    }
+  exports:
+    - name: QUALITY_GATE
+      description:
+        zh-CN: "Quality Gate 结果"
+        en: "Quality Gate Result"
+  arguments:
+    - name: "CodeQualityBinding"
+      schema:
+        type: alauda.io/toolbinding
+      display:
+        type: alauda.io/toolbinding
+        args:
+          bindingKind: codequalitytool
+          bindingToolType: Sonarqube
+        name:
+          zh-CN: "SonarQube 实例"
+          en: "SonarQube instance"
+        description:
+          zh-CN: "选择要使用的 SonarQube 实例"
+          en: "Select a SonarQube binding"
+      required: true
+    - name: "PlatformCodeRepository"
+      schema:
+        type: alauda.io/coderepositorymix
+      required: true
+      display:
+        type: alauda.io/coderepositorymix
+        name:
+          zh-CN: "代码仓库"
+          en: RepositoryPath
+        description:
+          zh-CN: "要扫描的代码仓库"
+          en: "The code repository need to be scanned"
+    - name: "Branch"
+      schema:
+        type: string
+      required: false
+      default: "*/master"
+      display:
+        type: string
+        name:
+          zh-CN: "分支"
+          en: Branch
+        description:
+          zh-CN: "要描的代码仓库分支"
+          en: "The code repository branch need to be scanned"
+    - name: "EnableBranchAnalysis"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "区分代码分支"
+          en: "Enable branch analysis"
+        description:
+          zh-CN: "扫描主分支以外的分支时，若想查看这些分支的扫描结果，需要在Sonarqube 支持多代码分支的同时，开启此开关"
+          en: "When scanning branches other than the main branch while keeping separate results, the Sonarqube instance needs to support branch analysis and turn on this feature"
+    - name: "AnalysisParameters"
+      schema:
+        type: string
+      required: false
+      display:
+        type: stringMultiline
+        name:
+          zh-CN: "代码扫描参数"
+          en: "Analysis Parameters"
+        description:
+          zh-CN: "为 Sonar Scanner 设置分析参数。当目录中存在 sonar-project.properties 文件时，将会忽略这个参数。详细参数见文档: https://docs.sonarqube.org/latest/analysis/analysis-parameters"
+          en: "Set analysis parameters for Sonar Scanner. When 'sonar-project.properties' existed in project, this argument will be omitted. see https://docs.sonarqube.org/latest/analysis/analysis-parameters for more details"
+    - name: "FailedIfNotPassQualityGate"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "质量阈未通过终止流水线"
+          en: "Fail pipeline when quality gate fails"
+        description:
+          zh-CN: "开启后，代码扫描结果为失败时，流水线执行状态变为失败，终止流水线"
+          en: "Fails pipeline execution when quality gate fails"
+    - name: "EnableJira"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "创建JIRA Issue"
+          en: "Create JIRA Issue"
+        description:
+          zh-CN: "创建JIRA Issue"
+          en: "Create JIRA Issue"
+    - name: "projectKey"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "项目关键字"
+          en: "projectKey"
+        description:
+          zh-CN: "项目关键字"
+          en: ""
+      required: true
+      default: ''
+    - name: "description"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "描述"
+          en: "description"
+        description:
+          zh-CN: "描述"
+          en: ""
+      required: true
+      default: ''
+    - name: "summary"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "标题"
+          en: "summary"
+        description:
+          zh-CN: "标题"
+          en: ""
+      required: true
+      default: ''
+    - name: "issuetype"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "问题类型"
+          en: "issuetype"
+        description:
+          zh-CN: "问题类型"
+          en: "issuetype"
+      required: true
+      default: ''
+
+    - name: "EnableMail"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "邮件通知"
+          en: "Send Mail"
+        description:
+          zh-CN: "邮件通知"
+          en: "Send Mail"
+
+    - name: "Notifications"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "通知方法"
+          en: "Notification Method"
+        description:
+          zh-CN: "通知方法"
+          en: "Notification Method"
+      required: false
+      default: '[{"name":"test-mail-notification"}]'
+
+    - name: "Content"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "邮件内容"
+          en: "Content"
+        description:
+          zh-CN: "邮件内容"
+          en: "Content"
+      required: false
+      default: '{"BUILD_TIMESTAMP":"${BUILD_TIMESTAMP}","JOB_BASE_NAME":"${JOB_BASE_NAME}","report_url":"http://www.baidu.task"}'
+
+
+  dependencies:
+    plugins:
+      - name: sonar
+        version: "2.8"

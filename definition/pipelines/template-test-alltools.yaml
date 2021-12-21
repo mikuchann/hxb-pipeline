@@ -1,0 +1,449 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: AllTest
+  namespace: default
+  annotations:
+    alauda.io/displayName.zh-CN: "测试流水线"
+    alauda.io/displayName.en: "Test pipeline"
+    alauda.io/description.zh-CN: "RobotFramework 测试 -> Selenium 测试 -> Jmeter 测试"
+    alauda.io/description.en: "RobotFramework Test -> Selenium Test -> Jmeter Test"
+    alauda.io/version: "1.0.0"
+    alauda.io/style.icon: test
+  labels:
+    category: Test
+spec:
+  engine: graph
+  withSCM: true
+  agent:
+    label: java
+  stages:
+    - name: "Robot Test"
+      display:
+        en: robort
+        zh-CN: robort
+      tasks:
+        - name: RobotFrameworkTestnew
+          kind: PipelineTaskTemplate
+          display:
+            en: robot test
+            zh-CN: robot 测试
+          relation:
+            - action: show
+              when:
+                name: UseRobot
+                value: true
+
+    - name: "Selenium Test"
+      display:
+        en: selenium
+        zh-CN: selenium
+      tasks:
+        - name: seleniumTestnew
+          kind: PipelineTaskTemplate
+          display:
+            en: selenium test
+            zh-CN: selenium 测试
+          relation:
+            - action: show
+              when:
+                name: UseSelenium
+                value: true
+    - name: "Jmeter Test"
+      display:
+        en: Jmeter
+        zh-CN: Jmeter
+      tasks:
+        - name: jmeterTestnew
+          kind: PipelineTaskTemplate
+          display:
+            en: Jmeter test
+            zh-CN: Jmeter 测试
+          relation:
+            - action: show
+              when:
+                name: UseJmeter
+                value: true
+
+  arguments:
+    - displayName:
+        zh-CN: "Robot 测试"
+        en: "Robot test"
+      items:
+        - name: "UseRobot"
+          schema:
+            type: boolean
+          binding:
+            - RobotFrameworkTestnew.args.EnableRobot
+          display:
+            type: boolean
+            advanced: false
+            name:
+              zh-CN: "开启 Robot"
+              en: "Use Robot"
+            description:
+              zh-CN: "开启后，进行Robot 测试"
+              en: "Whether to use Robot"
+          required: false
+          value: "false"
+        - name: "PlatformCodeRepositorya"
+          schema:
+            type: alauda.io/coderepositorymix
+          required: true
+          value: ""
+          binding:
+            - RobotFrameworkTestnew.args.PlatformCodeRepository
+          display:
+            type: alauda.io/coderepositorymix
+            name:
+              zh-CN: "代码仓库"
+              en: RepositoryPath
+            description:
+              zh-CN: "选择已为项目分配的代码仓库"
+              en: ""
+          relation:
+            - action: show
+              when:
+                name: UseRobot
+                value: true
+        - name: "Brancha"
+          schema:
+            type: string
+          required: true
+          value: ""
+          binding:
+            - RobotFrameworkTestnew.args.Branch
+          display:
+            type: alauda.io/codebranch
+            advanced: false
+            name:
+              zh-CN: "分支"
+              en: "Branch"
+            description:
+              zh-CN: "检出代码仓库中的分支"
+              en: "The code repository branch that you want to check out."
+            related: PlatformCodeRepositorya
+          relation:
+            - action: show
+              when:
+                name: UseRobot
+                value: true
+        - name: "RelativeDirectorya"
+          schema:
+            type: string
+          required: false
+          value: ""
+          binding:
+            - RobotFrameworkTestnew.args.RelativeDirectory
+          default: "."
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "相对目录"
+              en: RelativeDirectory
+            description:
+          relation:
+            - action: show
+              when:
+                name: UseRobot
+                value: true
+
+        - name: "testDir"
+          schema:
+            type: string
+          binding:
+            - RobotFrameworkTestnew.args.testDir
+          display:
+            type: string
+            name:
+              zh-CN: "测试目录"
+              en: "Test dir"
+            description:
+              zh-CN: "测试目录"
+              en: "Test dir"
+          required: true
+          default: ""
+          relation:
+            - action: show
+              when:
+                name: UseRobot
+                value: true
+    - displayName:
+        zh-CN: "Selenium 测试"
+        en: "Selenium Test"
+      items:
+        - name: "UseSelenium"
+          schema:
+            type: boolean
+          binding:
+            - seleniumTestnew.args.EnableseleniumTest
+          display:
+            type: boolean
+            advanced: false
+            name:
+              zh-CN: "开启 Selenium"
+              en: "Use Selenium"
+            description:
+              zh-CN: "开启后，进行Selenium测试"
+              en: "Whether to use Selenium"
+          required: false
+          value: "false"
+        - name: "PlatformCodeRepositoryb"
+          schema:
+            type: alauda.io/coderepositorymix
+          required: true
+          value: ""
+          binding:
+            - seleniumTestnew.args.PlatformCodeRepository
+          display:
+            type: alauda.io/coderepositorymix
+            name:
+              zh-CN: "代码仓库"
+              en: RepositoryPath
+            description:
+              zh-CN: "选择已为项目分配的代码仓库"
+              en: ""
+          relation:
+            - action: show
+              when:
+                name: UseSelenium
+                value: true
+        - name: "Branchb"
+          schema:
+            type: string
+          required: true
+          value: ""
+          binding:
+            - seleniumTestnew.args.Branch
+          display:
+            type: alauda.io/codebranch
+            advanced: false
+            name:
+              zh-CN: "分支"
+              en: "Branch"
+            description:
+              zh-CN: "检出代码仓库中的分支"
+              en: "The code repository branch that you want to check out."
+            related: PlatformCodeRepositoryb
+          relation:
+            - action: show
+              when:
+                name: UseSelenium
+                value: true
+        - name: "RelativeDirectoryb"
+          schema:
+            type: string
+          required: false
+          value: ""
+          binding:
+            - seleniumTestnew.args.RelativeDirectory
+          default: "."
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "相对目录"
+              en: RelativeDirectory
+            description:
+          relation:
+            - action: show
+              when:
+                name: UseSelenium
+                value: true
+        - name: "seleniumTest"
+          schema:
+            type: string
+          binding:
+            - seleniumTestnew.args.testPlan
+          display:
+            type: string
+            name:
+              zh-CN: "测试计划文件"
+              en: "Test plan file"
+            description:
+              zh-CN: "测试计划文件"
+              en: "Test plan file"
+          required: true
+          value: ""
+          default: ''
+          relation:
+            - action: show
+              when:
+                name: UseSelenium
+                value: true
+    - displayName:
+        zh-CN: "JMeter 测试"
+        en: "JMeter Test"
+      items:
+        - name: "UseJmeter"
+          schema:
+            type: boolean
+          binding:
+            - jmeterTestnew.args.EnableJmeter
+          display:
+            type: boolean
+            advanced: false
+            name:
+              zh-CN: "开启 Jmeter"
+              en: "Use Jmeter"
+            description:
+              zh-CN: "开启后，进行Jmeter测试"
+              en: "Whether to use Jmeter"
+          required: false
+          value: "false"
+        - name: "PlatformCodeRepositoryc"
+          schema:
+            type: alauda.io/coderepositorymix
+          required: true
+          value: ""
+          binding:
+            - jmeterTestnew.args.PlatformCodeRepository
+          display:
+            type: alauda.io/coderepositorymix
+            name:
+              zh-CN: "代码仓库"
+              en: RepositoryPath
+            description:
+              zh-CN: "选择已为项目分配的代码仓库"
+              en: ""
+          relation:
+            - action: show
+              when:
+                name: UseJmeter
+                value: true
+        - name: "Branchc"
+          schema:
+            type: string
+          required: true
+          value: ""
+          binding:
+            - jmeterTestnew.args.Branch
+          display:
+            type: alauda.io/codebranch
+            advanced: false
+            name:
+              zh-CN: "分支"
+              en: "Branch"
+            description:
+              zh-CN: "检出代码仓库中的分支"
+              en: "The code repository branch that you want to check out."
+            related: PlatformCodeRepositoryc
+          relation:
+            - action: show
+              when:
+                name: UseJmeter
+                value: true
+        - name: "RelativeDirectoryc"
+          schema:
+            type: string
+          required: false
+          value: ""
+          binding:
+            - jmeterTestnew.args.RelativeDirectory
+          default: "."
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "相对目录"
+              en: RelativeDirectory
+            description:
+          relation:
+            - action: show
+              when:
+                name: UseJmeter
+                value: true
+        - name: "jmeterTest"
+          schema:
+            type: string
+          binding:
+            - jmeterTestnew.args.testPlan
+          display:
+            type: string
+            name:
+              zh-CN: "测试计划文件"
+              en: "Test plan file"
+            description:
+              zh-CN: "测试计划文件"
+              en: "Test plan file"
+          required: true
+          value: ""
+          default: ''
+          relation:
+            - action: show
+              when:
+                name: UseJmeter
+                value: true
+##邮件设置
+    - displayName:
+        zh-CN: "邮件通知"
+        en: "SendMail"
+      items:
+        - name: "EnableMail"
+          schema:
+            type: boolean
+          binding:
+            - RobotFrameworkTestnew.args.EnableMail
+            - jmeterTestnew.args.EnableMail
+            - seleniumTestnew.args.EnableMail
+          display:
+            type: boolean
+            name:
+              zh-CN: "发送邮件"
+              en: "SendMail"
+            description:
+              zh-CN: "发送邮件"
+              en: "SendMail"
+          required: false
+          value: "false"
+
+        - name: "Notifications"
+          schema:
+            type: string
+          required: false
+          binding:
+            - RobotFrameworkTestnew.args.Notifications
+            - jmeterTestnew.args.Notifications
+            - seleniumTestnew.args.Notifications
+          value: |
+            '[{"name":"test-mail-notification"}]'
+          display:
+            type: stringMultiline
+            advanced: false
+            name:
+              zh-CN: "通知"
+              en: "Notifications"
+            description:
+              zh-CN: "Json格式，支持逗号分隔的列表。已经定义的通知方式包含了发出、接受对象和模板，不要单引号~~~~"
+              en: "Notifications"
+          relation:
+            - action: show
+              when:
+                name: EnableMail
+                value: true
+
+        - name: "Content"
+          schema:
+            type: string
+          required: false
+          binding:
+            - RobotFrameworkTestnew.args.Content
+            - jmeterTestnew.args.Content
+            - seleniumTestnew.args.Content
+          value: |
+            '{"BUILD_TIMESTAMP":"${BUILD_TIMESTAMP}","JOB_BASE_NAME":"${JOB_BASE_NAME}","reportLink":"${reportLink}"}'
+          display:
+            type: stringMultiline
+            advanced: false
+            name:
+              zh-CN: "邮件内容"
+              en: "Content"
+            description:
+              zh-CN: "Json格式邮件内容,不要单引号~~~~"
+              en: "Content"
+          relation:
+            - action: show
+              when:
+                name: EnableMail
+                value: true

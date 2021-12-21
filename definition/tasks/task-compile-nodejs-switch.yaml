@@ -1,0 +1,51 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTaskTemplate
+metadata:
+  name: nodejs
+  annotations:
+    alauda.io/description.en: Build a Nodejs project
+    alauda.io/description.zh-CN: 构建Nodejs程序
+    alauda.io/displayName.en: Nodejs Build
+    alauda.io/displayName.zh-CN: Nodejs构建
+    alauda.io/readme.en: Build a Nodejs project
+    alauda.io/readme.zh-CN: 构建Nodejs程序
+    alauda.io/style.icon: ""
+    alauda.io/version: 1.0.0
+  labels:
+    category: CI
+spec:
+  engine: gotpl
+  body: |
+    script {
+        dir(RELATIVE_DIRECTORY) {
+            container('nodejs') {
+                sh """{{.buildCommand}}"""
+            }
+        }
+    }
+  arguments:
+    - name: "EnableBuildPackage"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "Nodejs 构建"
+          en: "Nodejs Build"
+        description:
+          zh-CN: "Nodejs 构建"
+          en: "Nodejs Build"
+    - name: buildCommand
+      schema:
+        type: string
+      display:
+        type: code
+        name:
+          en: Build Command
+          zh-CN: 构建命令
+        description:
+          en: Build command. Defaults to npm install
+          zh-CN: 自定义更详细的构建命令。默认为：npm install
+      required: false
+      default: npm install

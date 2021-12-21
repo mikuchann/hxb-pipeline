@@ -1,0 +1,48 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTaskTemplate
+metadata:
+  name: jmeterTest
+  annotations:
+    alauda.io/displayName.zh-CN: JMeter 测试
+    alauda.io/displayName.en: JMeter Test
+    alauda.io/description.zh-CN: JMeter 测试
+    alauda.io/description.en: JMeter Test
+    alauda.io/readme.zh-CN: JMeter 测试
+    alauda.io/readme.en: JMeter Test
+    alauda.io/version: "1.0.1"
+    alauda.io/style.icon: ""
+  labels:
+    category: Test
+spec:
+  engine: gotpl
+  body: |+
+    script {
+      container('jmeter'){
+        sh 'ls {{.testPlan}} && jmeter -n -t {{.testPlan}} -l result.jtl -e -o result'
+        def files = findFiles glob: 'result/**/*'
+        for(file in files) {
+            def path = file.path.replaceAll('result/', '').replaceAll(file.name, '')
+            path = currentBuild.fullProjectName + '/' + currentBuild.number + '/' + path
+            sh 'curl  -Ffile=@' + file.path + ' "http://${REPORT_SERVER}:${REPORT_SERVER_PORT}/upload?token=${REPORT_SERVER_TOKEN}&path=' + path + '"'
+        }
+
+        echo 'test report link is below:'
+        echo "http://${REPORT_SERVER}:${REPORT_SERVER_WEB_PORT}/" + currentBuild.fullProjectName + '/' + currentBuild.number + '/index.html'
+        publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false,
+          reportDir: 'result', reportFiles: 'index.html', reportName: 'HTML Report', reportTitles: ''])
+      }
+    }
+  arguments:
+    - name: "testPlan"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "测试计划文件"
+          en: "Test plan file"
+        description:
+          zh-CN: "测试计划文件"
+          en: "Test plan file"
+      required: true
+      default: ''

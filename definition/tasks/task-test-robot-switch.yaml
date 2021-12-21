@@ -1,0 +1,177 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTaskTemplate
+metadata:
+  name: RobotFrameworkTestnew
+  annotations:
+    alauda.io/displayName.zh-CN: RobotFramework 测试
+    alauda.io/displayName.en: RobotFramework Test
+    alauda.io/description.zh-CN: RobotFramework 测试
+    alauda.io/description.en: RobotFramework Test
+    alauda.io/readme.zh-CN: RobotFramework 测试
+    alauda.io/readme.en: RobotFramework Test
+    alauda.io/version: "1.0.0"
+    alauda.io/style.icon: ""
+  labels:
+    category: Test
+spec:
+  engine: gotpl
+  agent:
+    label: robotframework
+  body: |+
+    script {
+        env.CODE_REPO = "{{.PlatformCodeRepository.url}}"
+        env.CREDENTIAL_ID = "{{.PlatformCodeRepository.credentialId}}"
+        env.RELATIVE_DIRECTORY = "{{.RelativeDirectory}}"
+  
+        env.BRANCH = "{{.Branch}}"
+
+        def scmVars = checkout([
+          $class: 'GitSCM',
+          branches: [[name: "${BRANCH}"]],
+          extensions: [[
+            $class: 'SubmoduleOption',
+            recursiveSubmodules: true,
+            reference: '',
+          ],[
+            $class: 'RelativeTargetDirectory',
+            relativeTargetDir: "${RELATIVE_DIRECTORY}"
+          ]],
+          userRemoteConfigs: [[
+            credentialsId: "${CREDENTIAL_ID}",
+            url: "${CODE_REPO}"
+          ]]
+        ])
+
+        env.GIT_COMMIT = scmVars.GIT_COMMIT
+        env.GIT_BRANCH = scmVars.GIT_BRANCH
+        env.GIT_BRANCH_AS_TAG = scmVars.GIT_BRANCH.replaceFirst("origin/","").replaceAll("/","-")
+
+        container('robotframework'){
+        echo "robot"
+        try{
+        sh 'robot {{.testDir}}'
+        }catch(Exception err){}
+        def testpath = currentBuild.fullProjectName + '/' + currentBuild.number + '/' + 'robot'
+        sh 'curl  -Ffile=@./report.html' + ' "http://${REPORT_SERVER}:${REPORT_SERVER_PORT}/upload?token=${REPORT_SERVER_TOKEN}&path=' + testpath + '"'
+        sh 'curl  -Ffile=@./log.html' + ' "http://${REPORT_SERVER}:${REPORT_SERVER_PORT}/upload?token=${REPORT_SERVER_TOKEN}&path=' + testpath + '"'
+        sh 'curl  -Ffile=@./output.xml' + ' "http://${REPORT_SERVER}:${REPORT_SERVER_PORT}/upload?token=${REPORT_SERVER_TOKEN}&path=' + testpath + '"'
+        echo 'test report link is below:\n' + "http://${REPORT_SERVER}:${REPORT_SERVER_WEB_PORT}/" + testpath + '/report.html'
+        retry(3) {
+        publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false,
+          reportDir: './', reportFiles: 'report.html', reportName: 'RobotFramework Report', reportTitles: 'RobotFramework Report'])
+        }
+        {{if .EnableMail -}}
+        env.reportLink="http://${REPORT_SERVER}:${REPORT_SERVER_WEB_PORT}/" + testpath + '/report.html'
+    	env.timehehe="${BUILD_TIMESTAMP}" + 'robot'
+        NOTIFICATIONS = """{{.Notifications}}"""
+        DETAILS = """{{.Content}}"""
+        def notice = """{"apiVersion":"aiops.alauda.io/v1beta1","kind":"NotificationMessage","metadata":{"name":"${timehehe}","namespace":"alauda-system"},"spec":{"body":{"details": ${DETAILS}},"notifications": ${NOTIFICATIONS}}}"""
+        alaudaDevops.withCluster(){alaudaDevops.withProject('alauda-system'){alaudaDevops.create(notice)}}
+        {{- end}}
+        }
+    }
+  arguments:
+    - name: "EnableRobot"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "开启 Robot"
+          en: "Use Robot"
+        description:
+          zh-CN: "开启 Robot"
+          en: "Use Robot"
+    - name: "PlatformCodeRepository"
+      schema:
+        type: alauda.io/coderepositorymix
+      required: true
+      display:
+        type: alauda.io/coderepositorymix
+        name:
+          zh-CN: "代码仓库"
+          en: RepositoryPath
+        description:
+          zh-CN: "选择已为项目分配的代码仓库"
+          en: "Select a code repository for the project."
+    - name: "RelativeDirectory"
+      schema:
+        type: string
+      required: false
+      default: "."
+      display:
+        type: string
+        name:
+          zh-CN: "相对目录"
+          en: RelativeDirectory
+        description:
+          zh-CN: "指定签出 Git 仓库的本地目录(相对于 workspace 根目录)。若为空，将使用 workspace 根目录"
+          en: "Specify a local directory (relative to the workspace root) where the Git repository will be checked out. If left empty, the workspace root itself will be used"
+    - name: "Branch"
+      schema:
+        type: string
+      required: false
+      display:
+        type: alauda.io/codebranch
+        name:
+          zh-CN: "分支"
+          en: Branch
+        description:
+          zh-CN: "检出代码仓库中的分支"
+          en: "The code repository branch that you want to check out. "
+        related: PlatformCodeRepository
+    - name: "testDir"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "测试目录"
+          en: "Test dir"
+        description:
+          zh-CN: "测试目录"
+          en: "Test dir"
+      required: true
+      default: ''
+##邮件配置
+    - name: "EnableMail"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "邮件通知"
+          en: "Send Mail"
+        description:
+          zh-CN: "邮件通知"
+          en: "Send Mail"
+
+    - name: "Notifications"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "通知方法"
+          en: "Notification Method"
+        description:
+          zh-CN: "通知方法"
+          en: "Notification Method"
+      required: false
+      default: '[{"name":"test-mail-notification"}]'
+
+    - name: "Content"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "邮件内容"
+          en: "Content"
+        description:
+          zh-CN: "邮件内容"
+          en: "Content"
+      required: false
+      default: '{"BUILD_TIMESTAMP":"${BUILD_TIMESTAMP}","JOB_BASE_NAME":"${JOB_BASE_NAME}","reportLink":"${reportLink}"}'

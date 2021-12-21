@@ -1,0 +1,132 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTaskTemplate
+metadata:
+  name: nodejswithjira
+  annotations:
+    alauda.io/description.en: Build a Nodejs project
+    alauda.io/description.zh-CN: 构建Nodejs程序
+    alauda.io/displayName.en: Nodejs Build
+    alauda.io/displayName.zh-CN: Nodejs构建
+    alauda.io/readme.en: Build a Nodejs project
+    alauda.io/readme.zh-CN: 构建Nodejs程序
+    alauda.io/style.icon: ""
+    alauda.io/version: 1.0.0
+  labels:
+    category: CI
+spec:
+  engine: gotpl
+  body: |
+    script {
+        try{
+        dir(RELATIVE_DIRECTORY) {
+            container('nodejs') {
+                sh """{{.buildCommand}}"""
+            }
+        }
+        }catch(Exception err){
+      throw err
+
+    }
+      {{if .EnableJira -}}
+      def testIssue = [fields: [
+         project: [key: '{{.projectKey}}'],
+         summary: "{{.summary}}",
+         description: "{{.description}}",
+         issuetype: [id: '{{.issuetype}}']]]
+
+      response = jiraNewIssue issue: testIssue,site: env.JIRA_SITE
+      echo response.data.toString()
+      {{- end}}
+
+    }
+  arguments:
+    - name: "EnableBuildPackage"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "Nodejs 构建"
+          en: "Nodejs Build"
+        description:
+          zh-CN: "Nodejs 构建"
+          en: "Nodejs Build"
+    - name: buildCommand
+      schema:
+        type: string
+      display:
+        type: code
+        name:
+          en: Build Command
+          zh-CN: 构建命令
+        description:
+          en: Build command. Defaults to npm install
+          zh-CN: 自定义更详细的构建命令。默认为：npm install
+      required: false
+      default: npm install
+    - name: "EnableJira"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "创建JIRA Issue"
+          en: "Create JIRA Issue"
+        description:
+          zh-CN: "创建JIRA Issue"
+          en: "Create JIRA Issue"
+    - name: "projectKey"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "项目关键字"
+          en: "projectKey"
+        description:
+          zh-CN: "项目关键字"
+          en: ""
+      required: true
+      default: ''
+    - name: "description"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "描述"
+          en: "description"
+        description:
+          zh-CN: "描述"
+          en: ""
+      required: true
+      default: ''
+    - name: "summary"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "标题"
+          en: "summary"
+        description:
+          zh-CN: "标题"
+          en: ""
+      required: true
+      default: ''
+    - name: "issuetype"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "问题类型"
+          en: "issuetype"
+        description:
+          zh-CN: "问题类型"
+          en: "issuetype"
+      required: true
+      default: ''
+

@@ -1,0 +1,35 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: ClusterPipelineTaskTemplate
+metadata:
+  name: blank
+  annotations:
+    alauda.io/displayName.zh-CN: 空命令
+    alauda.io/displayName.en: blank command
+    alauda.io/description.zh-CN: 空命令
+    alauda.io/description.en: blank command
+    alauda.io/readme.zh-CN: 空命令
+    alauda.io/readme.en: blank command
+    alauda.io/version: "1.0.0"
+    alauda.io/style.icon: ""
+  labels:
+    category: CI
+spec:
+  engine: gotpl
+  body: |+
+    script {
+    sh """{{.command}}"""
+    }
+  arguments:
+    - name: "command"
+      schema:
+        type: string
+      display:
+        type: code
+        name:
+          zh-CN: "空白命令"
+          en: "blank Command"
+        description:
+          zh-CN: "自定义更详细的shell命令。默认为：sleep 3s"
+          en: ""
+      required: true
+      default: 'sleep 3s'

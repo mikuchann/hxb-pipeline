@@ -1,0 +1,181 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTaskTemplate
+metadata:
+  name: nodejswithjiranew
+  annotations:
+    alauda.io/description.en: Build a Nodejs project
+    alauda.io/description.zh-CN: 构建Nodejs程序
+    alauda.io/displayName.en: Nodejs Build
+    alauda.io/displayName.zh-CN: Nodejs构建
+    alauda.io/readme.en: Build a Nodejs project
+    alauda.io/readme.zh-CN: 构建Nodejs程序
+    alauda.io/style.icon: ""
+    alauda.io/version: 1.0.2
+  labels:
+    category: CI
+spec:
+  engine: gotpl
+  body: |
+    script {
+        try{
+        dir(RELATIVE_DIRECTORY) {
+            container('nodejs') {
+                sh """{{.buildCommand}}"""
+            }
+        }
+        }catch(Exception err){
+
+      {{if .EnableJira -}}
+      def testIssue = [fields: [
+         project: [key: '{{.projectKey}}'],
+         summary: "{{.summary}}",
+         description: "{{.description}}",
+         issuetype: [id: '{{.issuetype}}']]]
+
+      response = jiraNewIssue issue: testIssue,site: env.JIRA_SITE
+      echo response.data.toString()
+      {{- end}}
+      {{if .EnableMail -}}
+      NOTIFICATIONS = """{{.Notifications}}"""
+      DETAILS = """{"BUILD_TIMESTAMP":"${BUILD_TIMESTAMP}","JOB_BASE_NAME":"${JOB_BASE_NAME}","reportLink":"流水线构建失败"}"""
+      def notice = """{"apiVersion":"aiops.alauda.io/v1beta1","kind":"NotificationMessage","metadata":{"name":"${BUILD_TIMESTAMP}","namespace":"alauda-system"},"spec":{"body":{"details": ${DETAILS}},"notifications": ${NOTIFICATIONS}}}"""
+      alaudaDevops.withCluster(){alaudaDevops.withProject('alauda-system'){alaudaDevops.create(notice)}}
+      {{- end}}
+
+      throw err
+
+    }
+
+    }
+  arguments:
+    - name: "EnableBuildPackage"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "Nodejs 构建"
+          en: "Nodejs Build"
+        description:
+          zh-CN: "Nodejs 构建"
+          en: "Nodejs Build"
+    - name: buildCommand
+      schema:
+        type: string
+      display:
+        type: code
+        name:
+          en: Build Command
+          zh-CN: 构建命令
+        description:
+          en: Build command. Defaults to npm install
+          zh-CN: 自定义更详细的构建命令。默认为：npm install
+      required: false
+      default: npm install
+    - name: "EnableJira"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "创建JIRA Issue"
+          en: "Create JIRA Issue"
+        description:
+          zh-CN: "创建JIRA Issue"
+          en: "Create JIRA Issue"
+    - name: "projectKey"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "项目关键字"
+          en: "projectKey"
+        description:
+          zh-CN: "项目关键字"
+          en: ""
+      required: true
+      default: ''
+    - name: "description"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "描述"
+          en: "description"
+        description:
+          zh-CN: "描述"
+          en: ""
+      required: true
+      default: ''
+    - name: "summary"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "标题"
+          en: "summary"
+        description:
+          zh-CN: "标题"
+          en: ""
+      required: true
+      default: ''
+    - name: "issuetype"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "问题类型"
+          en: "issuetype"
+        description:
+          zh-CN: "问题类型"
+          en: "issuetype"
+      required: true
+      default: ''
+    - name: "EnableMail"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "邮件通知"
+          en: "Send Mail"
+        description:
+          zh-CN: "邮件通知"
+          en: "Send Mail"
+
+    - name: "Notifications"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "通知方法"
+          en: "Notification Method"
+        description:
+          zh-CN: "通知方法"
+          en: "Notification Method"
+      required: false
+      default: '[{"name":"test-mail-notification"}]'
+
+    - name: "Content"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "邮件内容"
+          en: "Content"
+        description:
+          zh-CN: "邮件内容"
+          en: "Content"
+      required: false
+      default: '{"BUILD_TIMESTAMP":"${BUILD_TIMESTAMP}","JOB_BASE_NAME":"${JOB_BASE_NAME}","report_url":"http://www.baidu.task"}'
+
+

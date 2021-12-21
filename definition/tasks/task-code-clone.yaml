@@ -1,0 +1,125 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTaskTemplate
+metadata:
+  name: clone
+  namespace: default
+  annotations:
+    alauda.io/displayName.zh-CN: "Git Clone"
+    alauda.io/version: "1.0.0"
+    alauda.io/style.icon: ""
+  labels:
+    category: CI
+spec:
+  engine: gotpl
+  body: |+
+    script {
+      env.CODE_REPO = "{{.PlatformCodeRepository.url}}"
+      env.CREDENTIAL_ID = "{{.PlatformCodeRepository.credentialId}}"
+      env.RELATIVE_DIRECTORY = "{{.RelativeDirectory}}"
+      
+      {{if ne .PlatformCodeRepository.sourceType "SVN" -}}
+      env.BRANCH = "{{.Branch}}"
+
+      def scmVars = checkout([
+        $class: 'GitSCM',
+        branches: [[name: "${BRANCH}"]],
+        extensions: [[
+          $class: 'SubmoduleOption',
+          recursiveSubmodules: true,
+          reference: '',
+        ],[
+          $class: 'RelativeTargetDirectory',
+          relativeTargetDir: "${RELATIVE_DIRECTORY}"
+        ]],
+        userRemoteConfigs: [[
+          credentialsId: "${CREDENTIAL_ID}",
+          url: "${CODE_REPO}"
+        ]]
+      ])
+
+      env.GIT_COMMIT = scmVars.GIT_COMMIT
+      env.GIT_BRANCH = scmVars.GIT_BRANCH
+      env.GIT_BRANCH_AS_TAG = scmVars.GIT_BRANCH.replaceFirst("origin/","").replaceAll("/","-")
+
+      {{- end}}
+
+      {{if eq .PlatformCodeRepository.sourceType "SVN" -}}
+      {{if eq .RelativeDirectory "" -}}
+        env.RELATIVE_DIRECTORY = "."
+      {{- end}}
+      def scmVars = checkout([
+          $class: "SubversionSCM",
+          additionalCredentials: [],
+          excludedCommitMessages: "",
+          excludedRegions: "",
+          excludedRevprop: "",
+          excludedUsers: "",
+          filterChangelog: false,
+          ignoreDirPropChanges: false,
+          includedRegions: "",
+          locations: [[
+            credentialsId: "${CREDENTIAL_ID}", depthOption: "infinity", ignoreExternalsOption: true, local: "${RELATIVE_DIRECTORY}", remote: "${CODE_REPO}"
+          ]],
+          quietOperation: true, workspaceUpdater: [$class: "UpdateUpdater"]
+        ])
+        SVN_REVISION = scmVars.SVN_REVISION
+        env.SVN_REVISION = SVN_REVISION
+        env.CODE_COMMIT = SVN_REVISION
+      {{- end}}
+    }
+  exports:
+    - name: GIT_COMMIT
+      description:
+        zh-CN: "Git Commit ID"
+        en: "Git Commit ID"
+    - name: GIT_BRANCH
+      description:
+        zh-CN: "Git 分支名称"
+        en: "Git Branch Name"
+    - name: RELATIVE_DIRECTORY
+      description:
+        zh-CN: "相对目录"
+        en: "RelativeDirectory"
+    - name: GIT_BRANCH_AS_TAG
+      description:
+        zh-CN: "可以作为 Tag 的 Git Branch Name"
+        en: "Git Branch Without Origin"
+  arguments:
+    - name: "PlatformCodeRepository"
+      schema:
+        type: alauda.io/coderepositorymix
+      required: true
+      display:
+        type: alauda.io/coderepositorymix
+        name:
+          zh-CN: "代码仓库"
+          en: RepositoryPath
+        description:
+          zh-CN: "选择已为项目分配的代码仓库"
+          en: "Select a code repository for the project."
+    - name: "Branch"
+      schema:
+        type: string
+      required: false
+      display:
+        type: alauda.io/codebranch
+        name:
+          zh-CN: "分支"
+          en: Branch
+        description:
+          zh-CN: "检出代码仓库中的分支"
+          en: "The code repository branch that you want to check out. "
+        related: PlatformCodeRepository
+    - name: "RelativeDirectory"
+      schema:
+        type: string
+      required: false
+      default: "."
+      display:
+        type: string
+        name:
+          zh-CN: "相对目录"
+          en: RelativeDirectory
+        description:
+          zh-CN: "指定签出 Git 仓库的本地目录(相对于 workspace 根目录)。若为空，将使用 workspace 根目录"
+          en: "Specify a local directory (relative to the workspace root) where the Git repository will be checked out. If left empty, the workspace root itself will be used"

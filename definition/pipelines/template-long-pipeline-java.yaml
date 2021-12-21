@@ -1,0 +1,1251 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: FusionStageJavaBuildDeployServiceWithCustomRegistryandtest
+  namespace: default
+  annotations:
+    alauda.io/displayName.zh-CN: "长流水线-Java编译构建镜像并更新FusionStage应用"
+    alauda.io/displayName.en: "FusionStage Java Build & Update Application With CustomRegistry & Test"
+    alauda.io/description.zh-CN: "克隆代码 -> Java 构建 -> Docker 构建 -> 更新应用 -> 测试"
+    alauda.io/description.en: "Clone -> Java Build -> Docker Build -> Update Application -> Test"
+    alauda.io/version: "1.0.24"
+    alauda.io/style.icon: java,maven,docker,sonarqube,kubernetes,test
+  labels:
+    category: Build
+spec:
+  engine: graph
+  withSCM: true
+  agent:
+    label: java
+  stages:
+    - name: Clone
+      display:
+        en: 代码克隆
+        zh-CN: 克隆代码
+      tasks:
+        - name: clone
+          kind: ClusterPipelineTaskTemplate
+          type: public/clone
+          display:
+            en: 代码克隆
+            zh-CN: 克隆代码
+    - name: "Java Build"
+      display:
+        en: 代码编译
+        zh-CN: 编译代码
+      tasks:
+        - name: mavenwithjiranew
+          kind: PipelineTaskTemplate
+          display:
+            en: 代码编译
+            zh-CN: 编译代码
+    - name: "Code Scan"
+      display:
+        en: 代码扫描
+        zh-CN: 扫描代码
+      tasks:
+        - name: sonarnew
+          kind: PipelineTaskTemplate
+          display:
+            en: 代码扫描
+            zh-CN: 扫描代码
+          relation:
+            - action: show
+              when:
+                name: UseSonarQube
+                value: true
+    - name: "Docker Build"
+      display:
+        en: 镜像构建
+        zh-CN: 构建镜像
+      tasks:
+        - name: build-docker-fusionstagenew
+          kind: PipelineTaskTemplate
+          display:
+            en: 镜像构建
+            zh-CN: 构建镜像
+    - name: "DeployService"
+      display:
+        en: 服务部署
+        zh-CN: 部署服务
+      tasks:
+        - name: fusionStageDeployServiceWithCustomImagenew
+          kind: PipelineTaskTemplate
+          display:
+            en: 服务部署
+            zh-CN: 部署服务
+          relation:
+            - action: show
+              when:
+                name: EnableDeployment
+                value: true
+    - name: "blank"
+      tasks:
+        - name: blank
+          kind: PipelineTaskTemplate
+          display:
+            en: 检查服务
+            zh-CN: 检查服务
+    - name: "Robot Test"
+      display:
+        en: robort
+        zh-CN: robort
+      tasks:
+        - name: RobotFrameworkTestnew
+          kind: PipelineTaskTemplate
+          display:
+            en: robot test
+            zh-CN: robot 测试
+          relation:
+            - action: show
+              when:
+                name: UseRobot
+                value: true
+    - name: "Selenium Test"
+      display:
+        en: selenium
+        zh-CN: selenium
+      tasks:
+        - name: seleniumTestnew
+          kind: PipelineTaskTemplate
+          display:
+            en: selenium test
+            zh-CN: selenium 测试
+          relation:
+            - action: show
+              when:
+                name: UseSelenium
+                value: true
+    - name: "Jmeter Test"
+      display:
+        en: Jmeter
+        zh-CN: Jmeter
+      tasks:
+        - name: jmeterTestnew
+          kind: PipelineTaskTemplate
+          display:
+            en: Jmeter test
+            zh-CN: Jmeter 测试
+          relation:
+            - action: show
+              when:
+                name: UseJmeter
+                value: true
+  arguments:
+    - displayName:
+        zh-CN: "代码检出"
+        en: "Clone"
+      items:
+        - name: "PlatformCodeRepository"
+          schema:
+            type: alauda.io/coderepositorymix
+          required: true
+          value: ""
+          binding:
+            - clone.args.PlatformCodeRepository
+            - sonarnew.args.PlatformCodeRepository
+          display:
+            type: alauda.io/coderepositorymix
+            name:
+              zh-CN: "代码仓库"
+              en: RepositoryPath
+            description:
+              zh-CN: "选择已为项目分配的代码仓库"
+              en: ""
+        - name: "Branch"
+          schema:
+            type: string
+          required: true
+          value: ""
+          binding:
+            - clone.args.Branch
+            - sonarnew.args.Branch
+          display:
+            type: alauda.io/codebranch
+            advanced: false
+            name:
+              zh-CN: "分支"
+              en: "Branch"
+            description:
+              zh-CN: "检出代码仓库中的分支"
+              en: "The code repository branch that you want to check out."
+            related: PlatformCodeRepository
+        - name: "RelativeDirectory"
+          schema:
+            type: string
+          required: false
+          value: ""
+          binding:
+            - clone.args.RelativeDirectory
+          default: "."
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "相对目录"
+              en: RelativeDirectory
+            description:
+              zh-CN: "指定检出 Git 仓库的本地目录(相对于 workspace 根目录)。若为空，将使用 workspace 根目录"
+              en: "Specify a local directory (relative to the workspace root) where the Git repository will be checked out. If left empty, the workspace root itself will be used"
+    - displayName:
+        zh-CN: "Maven 构建"
+        en: "Maven Build"
+      items:
+        - name: "buildCommand"
+          schema:
+            type: string
+          binding:
+            - mavenwithjiranew.args.buildCommand
+          display:
+            type: code
+            advanced: false
+            name:
+              zh-CN: "构建命令"
+              en: "Build Command"
+            description:
+              zh-CN: "自定义更详细的构建命令。默认为：mvn clean package"
+              en: ""
+          required: false
+          default: 'mvn clean package'
+          value: ""
+        - name: "showTestResult"
+          required: false
+          schema:
+            type: boolean
+          value: "false"
+          binding:
+            - mavenwithjiranew.args.showTestResult
+          display:
+            type: boolean
+            advanced: false
+            name:
+              zh-CN: "展示 Junit 报告"
+              en: "Show Junit Result"
+            description:
+              zh-CN: "开启后，方便查看 Junit 报告"
+              en: ""
+          default: ''
+        - name: "testResultLocation"
+          required: true
+          schema:
+            type: string
+          value: ""
+          binding:
+            - mavenwithjiranew.args.testResultLocation
+          display:
+            type: string
+            advanced: false
+            name:
+              zh-CN: "Junit 结果报告路径"
+              en: "Path To Junit Result"
+            description:
+              zh-CN: "如：**/target/surefire-reports/**/*.xml"
+              en: ""
+          default: '**/target/surefire-reports/**/*.xml'
+          relation:
+            - action: show
+              when:
+                name: showTestResult
+                value: true
+    - displayName:
+        zh-CN: "代码扫描"
+        en: "Code Scanning"
+      items:
+        - name: "UseSonarQube"
+          schema:
+            type: boolean
+          display:
+            type: boolean
+            name:
+              zh-CN: "开启代码扫描"
+              en: "Use code analysis"
+            description:
+              zh-CN: "开启后，进行代码扫描"
+              en: "Whether to use Sonarqube for code scan"
+          required: false
+          value: "false"
+        - name: "CodeQualityBinding"
+          schema:
+            type: alauda.io/toolbinding
+          binding:
+            - sonarnew.args.CodeQualityBinding
+          required: true
+          value: ""
+          display:
+            type: alauda.io/toolbinding
+            args:
+              bindingKind: codequalitytool
+              bindingToolType: Sonarqube
+            name:
+              zh-CN: "SonarQube 实例"
+              en: "SonarQube instance"
+            description:
+              zh-CN: "选择要使用的 SonarQube 实例"
+              en: "Select a SonarQube binding"
+          relation:
+            - action: show
+              when:
+                name: UseSonarQube
+                value: true
+        - name: "EnableBranchAnalysis"
+          schema:
+            type: boolean
+          required: false
+          binding:
+            - sonarnew.args.EnableBranchAnalysis
+          value: "false"
+          display:
+            type: boolean
+            advanced: true
+            name:
+              zh-CN: "区分代码分支"
+              en: "Enable branch analysis"
+            description:
+              zh-CN: "扫描主分支以外的分支时，若想查看这些分支的扫描结果，需要在Sonarqube 支持多代码分支的同时，开启此开关"
+              en: "When scanning branches other than the main branch while keeping separate results, the Sonarqube instance needs to support branch analysis and turn on this feature"
+          relation:
+            - action: show
+              when:
+                name: UseSonarQube
+                value: true
+        - name: "AnalysisParameters"
+          schema:
+            type: string
+          required: false
+          binding:
+            - sonarnew.args.AnalysisParameters
+          value: |
+            sonar.sources=./src
+            sonar.java.binaries=./target/classes
+            sonar.sourceEncoding=UTF-8
+          display:
+            type: stringMultiline
+            advanced: false
+            name:
+              zh-CN: "代码扫描参数"
+              en: "Analysis Parameters"
+            description:
+              zh-CN: "为 Sonar Scanner 设置分析参数。当目录中存在 sonar-project.properties 文件时，将会忽略这个参数。详细参数见文档: https://docs.sonarqube.org/latest/analysis/analysis-parameters 和 https://docs.sonarqube.org/display/PLUG/Java+Plugin+and+Bytecode"
+              en: "Set analysis parameters for Sonar Scanner. When 'sonar-project.properties' existed in project, this argument will be omitted. see https://docs.sonarqube.org/latest/analysis/analysis-parameters and https://docs.sonarqube.org/display/PLUG/Java+Plugin+and+Bytecode for more details"
+          relation:
+            - action: show
+              when:
+                name: UseSonarQube
+                value: true
+        - name: "FailedIfNotPassQualityGate"
+          schema:
+            type: boolean
+          required: false
+          binding:
+            - sonarnew.args.FailedIfNotPassQualityGate
+          value: "false"
+          display:
+            type: boolean
+            advanced: true
+            name:
+              zh-CN: "质量阈未通过终止流水线"
+              en: "Fail pipeline when quality gate fails"
+            description:
+              zh-CN: "开启后，代码扫描结果为失败时，流水线执行状态变为失败，终止流水线"
+              en: "Fails pipeline execution when quality gate fails"
+          relation:
+            - action: show
+              when:
+                name: UseSonarQube
+                value: true
+    - displayName:
+        zh-CN: "Docker 构建"
+        en: "Docker Build"
+      items:
+        - name: "imageRepository"
+          schema:
+            type: string
+          binding:
+            - build-docker-fusionstagenew.args.imageRepository
+            - fusionStageDeployServiceWithCustomImagenew.args.imageRepository
+          display:
+            type: string
+            name:
+              zh-CN: "镜像仓库"
+              en: "imageRepository"
+            description:
+              zh-CN: "格式：host:port/image"
+              en: "host:port/image"
+          required: true
+          default: ''
+        - name: "imageTag"
+          schema:
+            type: string
+          binding:
+            - build-docker-fusionstagenew.args.imageTag
+            - fusionStageDeployServiceWithCustomImagenew.args.imageTag
+          display:
+            type: string
+            name:
+              zh-CN: "镜像 tag"
+              en: "imageTag"
+            description:
+              zh-CN: "镜像 tag"
+              en: "image tag"
+          required: true
+          default: 'latest'
+        - name: "remoteImageAPI"
+          schema:
+            type: string
+          binding:
+            - build-docker-fusionstagenew.args.remoteImageAPI
+          display:
+            type: string
+            name:
+              zh-CN: "镜像上传接口"
+              en: "remoteImageAPI"
+            description:
+              zh-CN: "镜像上传接口，如: https://0.0.0.0:1234/api"
+              en: ""
+          required: true
+          default: ''
+        - name: "imageAuthAPI"
+          schema:
+            type: string
+          binding:
+            - build-docker-fusionstagenew.args.imageAuthAPI
+          display:
+            type: string
+            name:
+              zh-CN: "镜像鉴权接口"
+              en: "imageAuthAPI"
+            description:
+              zh-CN: "镜像鉴权接口，如: https://0.0.0.0:1234/api"
+              en: ""
+          required: true
+          default: ''
+        - name: "imageAuthDomainName"
+          schema:
+            type: string
+          binding:
+            - build-docker-fusionstagenew.args.imageAuthDomainName
+          display:
+            type: string
+            name:
+              zh-CN: "镜像鉴权租户名"
+              en: "imageAuthDomainName"
+            description:
+              zh-CN: "镜像鉴权租户名"
+              en: ""
+          required: true
+          default: ''
+        - name: "imageAuthUserName"
+          schema:
+            type: string
+          binding:
+            - build-docker-fusionstagenew.args.imageAuthUserName
+          display:
+            type: string
+            name:
+              zh-CN: "镜像鉴权用户名"
+              en: "imageAuthUserName"
+            description:
+              zh-CN: "镜像鉴权用户名"
+              en: ""
+          required: true
+          default: ''
+        - name: "imageAuthPassword"
+          schema:
+            type: string
+          binding:
+            - build-docker-fusionstagenew.args.imageAuthPassword
+          display:
+            type: string
+            name:
+              zh-CN: "镜像鉴权密码"
+              en: "imageAuthPassword"
+            description:
+              zh-CN: "镜像鉴权密码"
+              en: ""
+          required: true
+          default: ''
+        - name: "dockerfile"
+          schema:
+            type: string
+          binding:
+            - build-docker-fusionstagenew.args.dockerfile
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "Dockerfile"
+              en: "Dockerfile"
+            description:
+              zh-CN: "Dockerfile 在代码仓库中的绝对路径"
+              en: ""
+          required: true
+          default: 'Dockerfile'
+          value: ""
+        - name: "context"
+          schema:
+            type: string
+          binding:
+            - build-docker-fusionstagenew.args.context
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "构建上下文"
+              en: "Build Context"
+            description:
+              zh-CN: "构建过程可以引用上下文中的任何文件。例如，构建中可以使用 COPY 命令在上下文中引用文件"
+              en: "The build process can refer to any of the files in the context. For example, your build can use a COPY instruction to reference a file in the context"
+          required: true
+          default: '.'
+          value: ""
+        - name: "buildArguments"
+          schema:
+            type: string
+          binding:
+            - build-docker-fusionstagenew.buildArguments
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "构建参数"
+              en: "Build Arguments"
+            description:
+              zh-CN: "自定义更多的构建参数，对镜像构建进行更详细的配置"
+              en: ""
+          required: false
+          default: ''
+          value: ""
+        - name: "retry"
+          schema:
+            type: string
+          binding:
+            - build-docker-fusionstagenew.args.retry
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "重试次数"
+              en: "Retry Times"
+            description:
+              zh-CN: "生成镜像时的失败重试次数"
+              en: ""
+          required: false
+          default: '3'
+          value: ""
+    - displayName:
+        zh-CN: "更新应用"
+        en: "Update Application"
+      items:
+        - name: "EnableDeployment"
+          schema:
+            type: boolean
+          binding:
+            - fusionStageDeployServiceWithCustomImagenew.args.EnableRobot
+          display:
+            type: boolean
+            advanced: false
+            name:
+              zh-CN: "启用部署"
+              en: "Use deploy"
+            description:
+              zh-CN: "启用部署"
+              en: "Use deploy"
+        - name: "domainName"
+          schema:
+            type: string
+          binding:
+            - fusionStageDeployServiceWithCustomImagenew.args.domainName
+          display:
+            type: string
+            name:
+              zh-CN: "租户名称"
+              en: "Domain Name"
+            description:
+              zh-CN: "fusionStage平台用户所属租户"
+              en: "fusionStage"
+          required: true
+          relation:
+            - action: show
+              when:
+                name: EnableDeployment
+                value: true
+        - name: "username"
+          schema:
+            type: string
+          binding:
+            - fusionStageDeployServiceWithCustomImagenew.args.username
+          display:
+            type: string
+            name:
+              zh-CN: "用户名"
+              en: "UserName"
+            description:
+              zh-CN: "fusionStage平台登录帐号"
+              en: "fusionStage"
+          required: true
+          relation:
+            - action: show
+              when:
+                name: EnableDeployment
+                value: true
+        - name: "password"
+          schema:
+            type: string
+          binding:
+            - fusionStageDeployServiceWithCustomImagenew.args.password
+          display:
+            type: string
+            name:
+              zh-CN: "密码"
+              en: "Password"
+            description:
+              zh-CN: "fusionStage平台登录密码"
+              en: "fusionStage"
+          required: true
+          relation:
+            - action: show
+              when:
+                name: EnableDeployment
+                value: true
+        - name: "projectId"
+          schema:
+            type: string
+          binding:
+            - fusionStageDeployServiceWithCustomImagenew.args.projectId
+          display:
+            type: string
+            name:
+              zh-CN: "项目 ID"
+              en: "Project ID"
+          required: true
+          relation:
+            - action: show
+              when:
+                name: EnableDeployment
+                value: true
+        - name: "applicationName"
+          schema:
+            type: string
+          binding:
+            - fusionStageDeployServiceWithCustomImagenew.args.applicationName
+          display:
+            type: string
+            name:
+              zh-CN: "应用名称"
+              en: "Application Name"
+          required: true
+          relation:
+            - action: show
+              when:
+                name: EnableDeployment
+                value: true
+        - name: "containerName"
+          schema:
+            type: string
+          binding:
+            - fusionStageDeployServiceWithCustomImagenew.args.containerName
+          display:
+            type: string
+            name:
+              zh-CN: "容器名称"
+              en: "Container Name"
+          required: true
+          relation:
+            - action: show
+              when:
+                name: EnableDeployment
+                value: true
+        - name: "command"
+          schema:
+            type: string
+          required: false
+          binding:
+          - fusionStageDeployServiceWithCustomImagenew.args.command
+          value: ""
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "启动命令"
+              en: "command"
+            description:
+              zh-CN: "即 command，相当于 Dockerfile 中的 ENTRYPOINT 命令。如果没有指定启动命令，将使用容器镜像中的 ENTRYPOINT"
+              en: "command"
+          relation:
+            - action: show
+              when:
+                name: EnableDeployment
+                value: true
+        - name: "args"
+          schema:
+            type: string
+          required: false
+          binding:
+          - fusionStageDeployServiceWithCustomImagenew.args.args
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "参数"
+              en: "args"
+            description:
+              zh-CN: "即 args，相当于 Dockerfile 中的 CMD，负责提供启动命令的命令参数。如果没有指定参数，将使用容器镜像中的 CMD"
+              en: "args"
+          relation:
+            - action: show
+              when:
+                name: EnableDeployment
+                value: true
+        - name: timeout
+          schema:
+            type: string
+          binding:
+            - fusionStageDeployServiceWithCustomImagenew.args.timeout
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "超时时间（秒）"
+              en: "Timeout (s)"
+            description:
+              zh-CN: "当前任务的执行时间若超过超时时间，则会中止任务，流水线变为失败状态"
+              en: ""
+          required: true
+          default: '300'
+          value: "300"
+          relation:
+            - action: show
+              when:
+                name: EnableDeployment
+                value: true
+    - displayName:
+        zh-CN: "shell 命令"
+        en: "shell command"
+      items:
+        - name: "shellCommand"
+          schema:
+            type: string
+          binding:
+            - blank.args.command
+          display:
+            type: code
+            advanced: false
+            name:
+              zh-CN: "shell 命令"
+              en: "shell Command"
+            description:
+              zh-CN: "自定义更详细的shell命令。默认为：sleep 3s"
+              en: ""
+          required: false
+          default: 'sleep 3s'
+          value: ""
+    - displayName:
+        zh-CN: "Robot 测试"
+        en: "Robot test"
+      items:
+        - name: "UseRobot"
+          schema:
+            type: boolean
+          binding:
+            - RobotFrameworkTestnew.args.EnableRobot
+          display:
+            type: boolean
+            advanced: false
+            name:
+              zh-CN: "开启 Robot"
+              en: "Use Robot"
+            description:
+              zh-CN: "开启后，进行Robot 测试"
+              en: "Whether to use Robot"
+          required: false
+          value: "false"
+        - name: "PlatformCodeRepositorya"
+          schema:
+            type: alauda.io/coderepositorymix
+          required: true
+          value: ""
+          binding:
+            - RobotFrameworkTestnew.args.PlatformCodeRepository
+          display:
+            type: alauda.io/coderepositorymix
+            name:
+              zh-CN: "代码仓库"
+              en: RepositoryPath
+            description:
+              zh-CN: "选择已为项目分配的代码仓库"
+              en: ""
+          relation:
+            - action: show
+              when:
+                name: UseRobot
+                value: true
+        - name: "Brancha"
+          schema:
+            type: string
+          required: true
+          value: ""
+          binding:
+            - RobotFrameworkTestnew.args.Branch
+          display:
+            type: alauda.io/codebranch
+            advanced: false
+            name:
+              zh-CN: "分支"
+              en: "Branch"
+            description:
+              zh-CN: "检出代码仓库中的分支"
+              en: "The code repository branch that you want to check out."
+            related: PlatformCodeRepositorya
+          relation:
+            - action: show
+              when:
+                name: UseRobot
+                value: true
+        - name: "RelativeDirectorya"
+          schema:
+            type: string
+          required: false
+          value: ""
+          binding:
+            - RobotFrameworkTestnew.args.RelativeDirectory
+          default: "."
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "相对目录"
+              en: RelativeDirectory
+            description:
+          relation:
+            - action: show
+              when:
+                name: UseRobot
+                value: true
+
+        - name: "testDir"
+          schema:
+            type: string
+          binding:
+            - RobotFrameworkTestnew.args.testDir
+          display:
+            type: string
+            name:
+              zh-CN: "测试目录"
+              en: "Test dir"
+            description:
+              zh-CN: "测试目录"
+              en: "Test dir"
+          required: true
+          default: ""
+          relation:
+            - action: show
+              when:
+                name: UseRobot
+                value: true
+    - displayName:
+        zh-CN: "Selenium 测试"
+        en: "Selenium Test"
+      items:
+        - name: "UseSelenium"
+          schema:
+            type: boolean
+          binding:
+            - seleniumTestnew.args.EnableseleniumTest
+          display:
+            type: boolean
+            advanced: false
+            name:
+              zh-CN: "开启 Selenium"
+              en: "Use Selenium"
+            description:
+              zh-CN: "开启后，进行Selenium测试"
+              en: "Whether to use Selenium"
+          required: false
+          value: "false"
+        - name: "PlatformCodeRepositoryb"
+          schema:
+            type: alauda.io/coderepositorymix
+          required: true
+          value: ""
+          binding:
+            - seleniumTestnew.args.PlatformCodeRepository
+          display:
+            type: alauda.io/coderepositorymix
+            name:
+              zh-CN: "代码仓库"
+              en: RepositoryPath
+            description:
+              zh-CN: "选择已为项目分配的代码仓库"
+              en: ""
+          relation:
+            - action: show
+              when:
+                name: UseSelenium
+                value: true
+        - name: "Branchb"
+          schema:
+            type: string
+          required: true
+          value: ""
+          binding:
+            - seleniumTestnew.args.Branch
+          display:
+            type: alauda.io/codebranch
+            advanced: false
+            name:
+              zh-CN: "分支"
+              en: "Branch"
+            description:
+              zh-CN: "检出代码仓库中的分支"
+              en: "The code repository branch that you want to check out."
+            related: PlatformCodeRepositoryb
+          relation:
+            - action: show
+              when:
+                name: UseSelenium
+                value: true
+        - name: "RelativeDirectoryb"
+          schema:
+            type: string
+          required: false
+          value: ""
+          binding:
+            - seleniumTestnew.args.RelativeDirectory
+          default: "."
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "相对目录"
+              en: RelativeDirectory
+            description:
+          relation:
+            - action: show
+              when:
+                name: UseSelenium
+                value: true
+        - name: "seleniumTest"
+          schema:
+            type: string
+          binding:
+            - seleniumTestnew.args.testPlan
+          display:
+            type: string
+            name:
+              zh-CN: "测试计划文件"
+              en: "Test plan file"
+            description:
+              zh-CN: "测试计划文件"
+              en: "Test plan file"
+          required: true
+          value: ""
+          default: ''
+          relation:
+            - action: show
+              when:
+                name: UseSelenium
+                value: true
+    - displayName:
+        zh-CN: "JMeter 测试"
+        en: "JMeter Test"
+      items:
+        - name: "UseJmeter"
+          schema:
+            type: boolean
+          binding:
+            - jmeterTestnew.args.EnableJmeter
+          display:
+            type: boolean
+            advanced: false
+            name:
+              zh-CN: "开启 Jmeter"
+              en: "Use Jmeter"
+            description:
+              zh-CN: "开启后，进行Jmeter测试"
+              en: "Whether to use Jmeter"
+          required: false
+          value: "false"
+        - name: "PlatformCodeRepositoryc"
+          schema:
+            type: alauda.io/coderepositorymix
+          required: true
+          value: ""
+          binding:
+            - jmeterTestnew.args.PlatformCodeRepository
+          display:
+            type: alauda.io/coderepositorymix
+            name:
+              zh-CN: "代码仓库"
+              en: RepositoryPath
+            description:
+              zh-CN: "选择已为项目分配的代码仓库"
+              en: ""
+          relation:
+            - action: show
+              when:
+                name: UseJmeter
+                value: true
+        - name: "Branchc"
+          schema:
+            type: string
+          required: true
+          value: ""
+          binding:
+            - jmeterTestnew.args.Branch
+          display:
+            type: alauda.io/codebranch
+            advanced: false
+            name:
+              zh-CN: "分支"
+              en: "Branch"
+            description:
+              zh-CN: "检出代码仓库中的分支"
+              en: "The code repository branch that you want to check out."
+            related: PlatformCodeRepositoryc
+          relation:
+            - action: show
+              when:
+                name: UseJmeter
+                value: true
+        - name: "RelativeDirectoryc"
+          schema:
+            type: string
+          required: false
+          value: ""
+          binding:
+            - jmeterTestnew.args.RelativeDirectory
+          default: "."
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "相对目录"
+              en: RelativeDirectory
+            description:
+          relation:
+            - action: show
+              when:
+                name: UseJmeter
+                value: true
+        - name: "jmeterTest"
+          schema:
+            type: string
+          binding:
+            - jmeterTestnew.args.testPlan
+          display:
+            type: string
+            name:
+              zh-CN: "测试计划文件"
+              en: "Test plan file"
+            description:
+              zh-CN: "测试计划文件"
+              en: "Test plan file"
+          required: true
+          value: ""
+          default: ''
+          relation:
+            - action: show
+              when:
+                name: UseJmeter
+                value: true
+##jira配置
+    - displayName:
+        zh-CN: "JIRA 信息"
+        en: "JIRA Information"
+      items:
+        - name: "UseJira"
+          schema:
+            type: boolean
+          binding:
+            - mavenwithjiranew.args.EnableJira
+            - build-docker-fusionstagenew.args.EnableJira
+            - fusionStageDeployServiceWithCustomImagenew.args.EnableJira
+            - sonarnew.args.EnableJira
+          display:
+            type: boolean
+            name:
+              zh-CN: "创建JIRA Issue"
+              en: "Create JIRA Issue"
+            description:
+              zh-CN: "开启后，进行jira issue 创建"
+              en: "Whether to create jira issue"
+          required: false
+          value: "false"
+        - name: "Project Key"
+          schema:
+            type: string
+          binding:
+            - mavenwithjiranew.args.projectKey
+            - build-docker-fusionstagenew.args.projectKey
+            - fusionStageDeployServiceWithCustomImagenew.args.projectKey
+            - sonarnew.args.projectKey
+          display:
+            type: string
+            advanced: false
+            name:
+              zh-CN: "项目关键字"
+              en: "Project Key"
+            description:
+              zh-CN: "项目关键字"
+              en: "Project Key"
+          required: true
+          default: ''
+          relation:
+            - action: show
+              when:
+                name: UseJira
+                value: true
+        - name: "Summary"
+          schema:
+            type: string
+          binding:
+            - mavenwithjiranew.args.summary
+            - build-docker-fusionstagenew.args.summary
+            - fusionStageDeployServiceWithCustomImagenew.args.summary
+            - sonarnew.args.summary
+          display:
+            type: string
+            advanced: false
+            name:
+              zh-CN: "标题"
+              en: "Summary"
+            description:
+              zh-CN: "标题"
+              en: "Summary"
+          required: true
+          default: ''
+          relation:
+            - action: show
+              when:
+                name: UseJira
+                value: true
+        - name: "Description"
+          schema:
+            type: string
+          binding:
+            - mavenwithjiranew.args.description
+            - build-docker-fusionstagenew.args.description
+            - fusionStageDeployServiceWithCustomImagenew.args.description
+            - sonarnew.args.description
+          display:
+            type: string
+            advanced: false
+            name:
+              zh-CN: "描述"
+              en: "Description"
+            description:
+              zh-CN: "描述"
+              en: "description"
+          required: true
+          default: ''
+          relation:
+            - action: show
+              when:
+                name: UseJira
+                value: true
+        - name: "Issuetype"
+          schema:
+            type: string
+          binding:
+            - mavenwithjiranew.args.issuetype
+            - build-docker-fusionstagenew.args.issuetype
+            - fusionStageDeployServiceWithCustomImagenew.args.issuetype
+            - sonarnew.args.issuetype
+          display:
+            type: string
+            advanced: false
+            name:
+              zh-CN: "问题类型"
+              en: "issuetype"
+            description:
+              zh-CN: "问题类型"
+              en: "issuetype"
+          required: true
+          default: ''
+          relation:
+            - action: show
+              when:
+                name: UseJira
+                value: true
+##邮件设置
+##配置开关
+    - displayName:
+        zh-CN: "邮件通知"
+        en: "SendMail"
+      items:
+        - name: "EnableMail"
+          schema:
+            type: boolean
+          binding:
+            - RobotFrameworkTestnew.args.EnableMail
+            - jmeterTestnew.args.EnableMail
+            - seleniumTestnew.args.EnableMail
+            - mavenwithjiranew.args.EnableMail
+            - build-docker-fusionstagenew.args.EnableMail
+            - fusionStageDeployServiceWithCustomImagenew.args.EnableMail
+            - sonarnew.args.EnableMail
+          display:
+            type: boolean
+            name:
+              zh-CN: "发送邮件"
+              en: "SendMail"
+            description:
+              zh-CN: "发送邮件"
+              en: "SendMail"
+          required: false
+          value: "false"
+##配置通知模板选项
+        - name: "Notifications"
+          schema:
+            type: string
+          required: false
+          binding:
+            - RobotFrameworkTestnew.args.Notifications
+            - jmeterTestnew.args.Notifications
+            - seleniumTestnew.args.Notifications
+            - mavenwithjiranew.args.Notifications
+            - build-docker-fusionstagenew.args.Notifications
+            - fusionStageDeployServiceWithCustomImagenew.args.Notifications
+            - sonarnew.args.Notifications
+          value: |
+            '[{"name":"test-mail-notification"}]'
+          display:
+            type: stringMultiline
+            advanced: false
+            name:
+              zh-CN: "通知"
+              en: "Notifications"
+            description:
+              zh-CN: "Json格式，支持逗号分隔的列表。已经定义的通知方式包含了发出、接受对象和模板，不要单引号~~~~"
+              en: "Notifications"
+          relation:
+            - action: show
+              when:
+                name: EnableMail
+                value: true
+##配置通知内容选项
+        - name: "Content"
+          schema:
+            type: string
+          required: false
+          binding:
+            - jmeterTestnew.args.Content
+            - seleniumTestnew.args.Content
+            - RobotFrameworkTestnew.args.Content
+          value: |
+            '{"BUILD_TIMESTAMP":"${BUILD_TIMESTAMP}","JOB_BASE_NAME":"${JOB_BASE_NAME}","reportLink":"${reportLink}"}'
+          display:
+            type: stringMultiline
+            advanced: false
+            name:
+              zh-CN: "邮件内容"
+              en: "Content"
+            description:
+              zh-CN: "Json格式邮件内容,不要单引号~~~~"
+              en: "Content"
+          relation:
+            - action: show
+              when:
+                name: EnableMail
+                value: true
+

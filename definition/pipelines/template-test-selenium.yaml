@@ -1,0 +1,170 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: SeleniumTest
+  namespace: default
+  annotations:
+    alauda.io/displayName.zh-CN: "测试流水线-Selenium功能UI测试"
+    alauda.io/displayName.en: "Selenium Test"
+    alauda.io/description.zh-CN: "克隆代码 -> Selenium 测试"
+    alauda.io/description.en: "Clone -> Selenium Test"
+    alauda.io/version: "1.0.0"
+    alauda.io/style.icon: selenium
+  labels:
+    category: Test
+spec:
+  engine: graph
+  withSCM: true
+  agent:
+    label: selenium
+  stages:
+    - name: Clone
+      tasks:
+        - name: clone
+          kind: ClusterPipelineTaskTemplate
+          type: public/clone
+    - name: "Selenium test"
+      tasks:
+        - name: seleniumTest
+          kind: PipelineTaskTemplate
+  arguments:
+    - displayName:
+        zh-CN: "代码检出"
+        en: "Clone"
+      items:
+        - name: "PlatformCodeRepository"
+          schema:
+            type: alauda.io/coderepositorymix
+          required: true
+          value: ""
+          binding:
+            - clone.args.PlatformCodeRepository
+          display:
+            type: alauda.io/coderepositorymix
+            name:
+              zh-CN: "代码仓库"
+              en: RepositoryPath
+            description:
+              zh-CN: "选择已为项目分配的代码仓库"
+              en: ""
+        - name: "Branch"
+          schema:
+            type: string
+          required: true
+          value: ""
+          binding:
+            - clone.args.Branch
+          display:
+            type: alauda.io/codebranch
+            advanced: false
+            name:
+              zh-CN: "分支"
+              en: "Branch"
+            description:
+              zh-CN: "检出代码仓库中的分支"
+              en: "The code repository branch that you want to check out."
+            related: PlatformCodeRepository
+        - name: "RelativeDirectory"
+          schema:
+            type: string
+          required: false
+          value: ""
+          binding:
+            - clone.args.RelativeDirectory
+          default: "."
+          display:
+            type: string
+            advanced: true
+            name:
+              zh-CN: "相对目录"
+              en: Relative Directory
+            description:
+              zh-CN: "指定检出 Git 仓库的本地目录(相对于 workspace 根目录)。若为空，将使用 workspace 根目录"
+              en: "Specify a local directory (relative to the workspace root) where the Git repository will be checked out. If left empty, the workspace root itself will be used"
+    - displayName:
+        zh-CN: "Selenium 测试"
+        en: "Selenium Test"
+      items:
+        - name: "seleniumTest"
+          schema:
+            type: string
+          binding:
+            - seleniumTest.args.testPlan
+          display:
+            type: string
+            name:
+              zh-CN: "测试计划文件"
+              en: "Test plan file"
+            description:
+              zh-CN: "测试计划文件"
+              en: "Test plan file"
+          required: true
+          value: ""
+          default: ''
+
+    - displayName:
+        zh-CN: "邮件通知"
+        en: "SendMail"
+      items:
+        - name: "EnableMail"
+          schema:
+            type: boolean
+          binding:
+            - seleniumTest.args.EnableMail
+          display:
+            type: boolean
+            name:
+              zh-CN: "发送邮件"
+              en: "SendMail"
+            description:
+              zh-CN: "发送邮件"
+              en: "SendMail"
+          required: false
+          value: "false"
+
+        - name: "Notifications"
+          schema:
+            type: string
+          required: false
+          binding:
+            - seleniumTest.args.Notifications
+          value: |
+            '[{"name":"test-mail-notification"}]'
+          display:
+            type: stringMultiline
+            advanced: false
+            name:
+              zh-CN: "通知"
+              en: "Notifications"
+            description:
+              zh-CN: "Json格式，支持逗号分隔的列表。已经定义的通知方式包含了发出、接受对象和模板，不要单引号~~~~"
+              en: "Notifications"
+          relation:
+            - action: show
+              when:
+                name: EnableMail
+                value: true
+
+        - name: "Content"
+          schema:
+            type: string
+          required: false
+          binding:
+            - seleniumTest.args.Content
+          value: |
+            '{"BUILD_TIMESTAMP":"${BUILD_TIMESTAMP}","JOB_BASE_NAME":"${JOB_BASE_NAME}","reportLink":"${reportLink}"}'
+          display:
+            type: stringMultiline
+            advanced: false
+            name:
+              zh-CN: "邮件内容"
+              en: "Content"
+            description:
+              zh-CN: "Json格式邮件内容,不要单引号~~~~"
+              en: "Content"
+          relation:
+            - action: show
+              when:
+                name: EnableMail
+                value: true
+

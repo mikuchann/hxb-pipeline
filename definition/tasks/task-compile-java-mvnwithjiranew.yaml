@@ -1,0 +1,198 @@
+apiVersion: devops.alauda.io/v1alpha1
+kind: PipelineTaskTemplate
+metadata:
+  name: mavenwithjiranew
+  annotations:
+    alauda.io/displayName.zh-CN: Maven构建
+    alauda.io/displayName.en: Maven Build
+    alauda.io/description.zh-CN: Maven构建
+    alauda.io/description.en: Maven Build
+    alauda.io/readme.zh-CN: Maven构建
+    alauda.io/readme.en: Maven Build
+    alauda.io/version: "1.1.2"
+    alauda.io/style.icon: ""
+  labels:
+    category: CI
+spec:
+  engine: gotpl
+  body: |+
+    script {
+
+    try{
+      container('java'){
+        sh """{{.buildCommand}}"""
+      }
+    }catch(Exception err){
+
+      {{if .EnableMail -}}
+      NOTIFICATIONS = """{{.Notifications}}"""
+      DETAILS = """{"BUILD_TIMESTAMP":"${BUILD_TIMESTAMP}","JOB_BASE_NAME":"${JOB_BASE_NAME}","reportLink":"流水线构建失败"}"""
+      def notice = """{"apiVersion":"aiops.alauda.io/v1beta1","kind":"NotificationMessage","metadata":{"name":"${BUILD_TIMESTAMP}","namespace":"alauda-system"},"spec":{"body":{"details": ${DETAILS}},"notifications": ${NOTIFICATIONS}}}"""
+      alaudaDevops.withCluster(){alaudaDevops.withProject('alauda-system'){alaudaDevops.create(notice)}}
+      {{- end}}
+      
+      {{if .EnableJira -}}
+      def testIssue = [fields: [
+         project: [key: '{{.projectKey}}'],
+         summary: "{{.summary}}",
+         description: "{{.description}}",
+         issuetype: [id: '{{.issuetype}}']]]
+
+      response = jiraNewIssue issue: testIssue,site: env.JIRA_SITE
+      echo response.data.toString()
+      {{- end}}
+
+      throw err
+
+    }finally{
+      {{- if .showTestResult}}
+       junit "{{.testResultLocation}}"
+      {{- end}}
+    }
+    }
+  arguments:
+    - name: "buildCommand"
+      schema:
+        type: string
+      display:
+        type: code
+        name:
+          zh-CN: "构建命令"
+          en: "Build Command"
+        description:
+          zh-CN: "自定义更详细的构建命令。默认为：mvn clean package"
+          en: ""
+      required: true
+      default: 'mvn clean package'
+    - name: "EnableJira"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "创建JIRA Issue"
+          en: "Create JIRA Issue"
+        description:
+          zh-CN: "创建JIRA Issue"
+          en: "Create JIRA Issue"
+    - name: "projectKey"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "项目关键字"
+          en: "projectKey"
+        description:
+          zh-CN: "项目关键字"
+          en: ""
+      required: true
+      default: ''
+    - name: "description"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "描述"
+          en: "description"
+        description:
+          zh-CN: "描述"
+          en: ""
+      required: true
+      default: ''
+    - name: "summary"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "标题"
+          en: "summary"
+        description:
+          zh-CN: "标题"
+          en: ""
+      required: true
+      default: ''
+    - name: "issuetype"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "问题类型"
+          en: "issuetype"
+        description:
+          zh-CN: "问题类型"
+          en: "issuetype"
+      required: true
+      default: ''
+    - name: "showTestResult"
+      schema:
+        type: boolean
+      display:
+        type: boolean
+        name:
+          zh-CN: "展示 JUnit 测试报告"
+          en: "Show JUnit test report"
+        description:
+          zh-CN: "开启后，将在流水线执行记录详情页展示 JUnit 测试报告"
+          en: ""
+      required: true
+      default: "false"
+    - name: "testResultLocation"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "测试结果路径"
+          en: "Test Result location"
+        description:
+          zh-CN: "测试结果位置 例如 **/target/surefire-reports/**/*.xml "
+          en: ""
+      required: true
+      default: "**/target/surefire-reports/**/*.xml"
+
+    - name: "EnableMail"
+      schema:
+        type: boolean
+      required: false
+      display:
+        type: boolean
+        name:
+          zh-CN: "邮件通知"
+          en: "Send Mail"
+        description:
+          zh-CN: "邮件通知"
+          en: "Send Mail"
+
+    - name: "Notifications"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "通知方法"
+          en: "Notification Method"
+        description:
+          zh-CN: "通知方法"
+          en: "Notification Method"
+      required: false
+      default: '[{"name":"test-mail-notification"}]'
+
+    - name: "Content"
+      schema:
+        type: string
+      display:
+        type: string
+        name:
+          zh-CN: "邮件内容"
+          en: "Content"
+        description:
+          zh-CN: "邮件内容"
+          en: "Content"
+      required: false
+      default: '{"BUILD_TIMESTAMP":"${BUILD_TIMESTAMP}","JOB_BASE_NAME":"${JOB_BASE_NAME}","report_url":"http://www.baidu.task"}'
+
